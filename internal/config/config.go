@@ -1,4 +1,4 @@
-package gatorConfig
+package config
 
 import (
 	"encoding/json"
@@ -65,7 +65,7 @@ func Read() (Config, error) {
 	return cfg, nil
 }
 
-func (cfg *Config) SetUser(user string) {
+func (cfg *Config) SetUser(user string) error {
 	cfg.CurrentUserName = user
-	write(*cfg)
+	return write(*cfg)
 }

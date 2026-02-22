@@ -1,19 +1,40 @@
 package main
 
 import (
-	gatorConfig "github.com/carnex/gator/internal/config"
+	"log"
+	"os"
+
+	"github.com/carnex/gator/internal/config"
 )
 
-func main() {
-	cfg, err := gatorConfig.Read()
-	if err != nil {
-		println(err)
-	}
-	cfg.SetUser("Erik")
-	post, err := gatorConfig.Read()
-	if err != nil {
-		println(err)
-	}
-	println(post.DbURL, post.CurrentUserName)
+type state struct {
+	cfg *config.Config
+}
 
+func main() {
+	cfg, err := config.Read()
+	if err != nil {
+		log.Fatalf("error reading config: %v", err)
+	}
+
+	programState := &state{
+		cfg: &cfg,
+	}
+
+	cmds := commands{
+		registeredCommands: make(map[string]func(*state, command) error),
+	}
+	cmds.register("login", handlerLogin)
+
+	if len(os.Args) < 2 {
+		log.Fatal("Usage: cli <command> [args...]")
+	}
+
+	cmdName := os.Args[1]
+	cmdArgs := os.Args[2:]
+
+	err = cmds.run(programState, command{Name: cmdName, Args: cmdArgs})
+	if err != nil {
+		log.Fatal(err)
+	}
 }
