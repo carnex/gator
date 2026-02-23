@@ -1,13 +1,17 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"os"
 
 	"github.com/carnex/gator/internal/config"
+	"github.com/carnex/gator/internal/database"
+	_ "github.com/lib/pq"
 )
 
 type state struct {
+	db  *database.Queries
 	cfg *config.Config
 }
 
@@ -16,15 +20,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("error reading config: %v", err)
 	}
+	db, err := sql.Open("postgres", cfg.DbURL)
+	dbQueries := database.New(db)
+
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	programState := &state{
 		cfg: &cfg,
+		db:  dbQueries,
 	}
 
 	cmds := commands{
 		registeredCommands: make(map[string]func(*state, command) error),
 	}
 	cmds.register("login", handlerLogin)
+	cmds.register("register", handlerRegister)
 
 	if len(os.Args) < 2 {
 		log.Fatal("Usage: cli <command> [args...]")
