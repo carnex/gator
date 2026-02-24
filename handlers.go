@@ -10,6 +10,17 @@ import (
 	"github.com/google/uuid"
 )
 
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error {
+	return func(s *state, cmd command) error {
+		loggerUser, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
+		if err != nil {
+			return err
+		}
+		return handler(s, cmd, loggerUser)
+	}
+
+}
+
 func handlerLogin(s *state, cmd command) error {
 	if len(cmd.Args) != 1 {
 		return fmt.Errorf("usage: %s <name>", cmd.Name)
@@ -87,15 +98,11 @@ func handlerAgg(s *state, cmd command) error {
 	return nil
 }
 
-func handlerAddFeed(s *state, cmd command) error {
+func handlerAddFeed(s *state, cmd command, user database.User) error {
 	if len(cmd.Args) != 2 {
 		return fmt.Errorf("usage: %s <name>", cmd.Name)
 	}
 	ctx := context.Background()
-	user, err := s.db.GetUser(ctx, s.cfg.CurrentUserName)
-	if err != nil {
-		return err
-	}
 	insertedFeed, err := s.db.CreateFeed(ctx, database.CreateFeedParams{ID: uuid.New(), CreatedAt: time.Now(), UpdatedAt: time.Now(), Name: cmd.Args[0], Url: cmd.Args[1], UserID: user.ID})
 	if err != nil {
 		return nil
@@ -124,15 +131,11 @@ func handlerFeeds(s *state, cmd command) error {
 	return nil
 }
 
-func handlerFollow(s *state, cmd command) error {
+func handlerFollow(s *state, cmd command, user database.User) error {
 	if len(cmd.Args) != 1 {
 		return fmt.Errorf("usage: %s <name>", cmd.Name)
 	}
 	ctx := context.Background()
-	user, err := s.db.GetUser(ctx, s.cfg.CurrentUserName)
-	if err != nil {
-		return err
-	}
 	feed, err := s.db.GetFeed(ctx, cmd.Args[0])
 	if err != nil {
 		return err
@@ -142,16 +145,12 @@ func handlerFollow(s *state, cmd command) error {
 	return nil
 }
 
-func handlerFollowing(s *state, cmd command) error {
+func handlerFollowing(s *state, cmd command, user database.User) error {
 	if len(cmd.Args) != 0 {
 		return fmt.Errorf("usage: %s <name>", cmd.Name)
 	}
 
 	ctx := context.Background()
-	user, err := s.db.GetUser(ctx, s.cfg.CurrentUserName)
-	if err != nil {
-		return err
-	}
 	following, err := s.db.GetFeedsFollowsForUser(ctx, user.ID)
 	if err != nil {
 		return err
@@ -159,5 +158,18 @@ func handlerFollowing(s *state, cmd command) error {
 	for _, follows := range following {
 		fmt.Printf("Following: %s\n", follows.Name_2)
 	}
+	return nil
+}
+
+func handlerUnfollow(s *state, cmd command, user database.User) error {
+	if len(cmd.Args) != 1 {
+		return fmt.Errorf("usage: %s <name>", cmd.Name)
+	}
+	ctx := context.Background()
+	feed, err := s.db.GetFeed(ctx, cmd.Args[0])
+	if err != nil {
+		return err
+	}
+	s.db.Unfollow(ctx, database.UnfollowParams{UserID: user.ID, FeedID: feed.ID})
 	return nil
 }
