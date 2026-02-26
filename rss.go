@@ -2,10 +2,16 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/xml"
+	"fmt"
 	"html"
 	"io"
 	"net/http"
+	"time"
+
+	"github.com/carnex/gator/internal/database"
+	"github.com/google/uuid"
 )
 
 type RSSFeed struct {
@@ -49,4 +55,33 @@ func fetchFeed(ctx context.Context, feedurl string) (*RSSFeed, error) {
 		output.Channel.Item[i].Description = html.UnescapeString(item.Description)
 	}
 	return &output, err
+}
+
+func scrapeFeeds(s *state) error {
+	ctx := context.Background()
+	nextFeed, err := s.db.GetNextFeedToFetch(ctx)
+	if err != nil {
+		return err
+	}
+	err = s.db.MarkFeedFetched(ctx, database.MarkFeedFetchedParams{ID: nextFeed.ID, LastFetchedAt: sql.NullTime{Time: time.Now(), Valid: true}, UpdatedAt: time.Now()})
+	if err != nil {
+		return err
+	}
+	feed, err := fetchFeed(ctx, nextFeed.Url)
+	if err != nil {
+		return err
+	}
+	for _, item := range feed.Channel.Item {
+		pubtime, err := time.Parse(time.RFC1123Z, item.PubDate)
+		if err != nil {
+			return err
+		}
+		post, err := s.db.CreatePosts(ctx, database.CreatePostsParams{ID: uuid.New(), CreatedAt: time.Now(), UpdatedAt: time.Now(), Title: item.Title, Url: item.Link, Description: item.Description, PublishedAt: pubtime, FeedID: nextFeed.ID})
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Succesfully save %s\n", post.Title)
+	}
+
+	return nil
 }

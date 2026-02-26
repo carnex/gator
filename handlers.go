@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-
+	"strconv"
 	"time"
 
 	"github.com/carnex/gator/internal/database"
@@ -90,12 +90,17 @@ func handlerUsers(s *state, cmd command) error {
 }
 
 func handlerAgg(s *state, cmd command) error {
-	if len(cmd.Args) != 0 {
+	if len(cmd.Args) != 1 {
 		return fmt.Errorf("usage: %s <name>", cmd.Name)
 	}
-	ctx := context.Background()
-	fmt.Print(fetchFeed(ctx, "https://www.wagslane.dev/index.xml"))
-	return nil
+	time_between_requests, err := time.ParseDuration(cmd.Args[0])
+	if err != nil {
+		return nil
+	}
+	ticker := time.NewTicker(time_between_requests)
+	for ; ; <-ticker.C {
+		scrapeFeeds(s)
+	}
 }
 
 func handlerAddFeed(s *state, cmd command, user database.User) error {
@@ -171,5 +176,25 @@ func handlerUnfollow(s *state, cmd command, user database.User) error {
 		return err
 	}
 	s.db.Unfollow(ctx, database.UnfollowParams{UserID: user.ID, FeedID: feed.ID})
+	return nil
+}
+
+func handlerBrowse(s *state, cmd command, user database.User) error {
+	limit := 2
+	if len(cmd.Args) == 1 {
+		parsed, err := strconv.Atoi(cmd.Args[0])
+		if err != nil {
+			return err
+		}
+		limit = parsed
+	}
+
+	posts, err := s.db.GetPostsForUser(context.Background(), database.GetPostsForUserParams{UserID: user.ID, Limit: int32(limit)})
+	if err != nil {
+		return nil
+	}
+	for _, post := range posts {
+		fmt.Printf("Title: %s Description %s Url: %s published at: %s\n", post.Title, post.Description, post.Url, post.PublishedAt)
+	}
 	return nil
 }
